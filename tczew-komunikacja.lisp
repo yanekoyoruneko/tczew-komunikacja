@@ -99,13 +99,15 @@
 
 
 (defun row-to-time (tr)
-  (let ((hour (lquery:$1 tr "td" (first) (text)))
-	(minutes-in-row (lquery:$ tr "td" (eq 1) "div" (map (lambda (el) (lquery:$1 el (text)))))))
+  (let* ((hour (lquery:$1 tr "td" (first) (text)))
+	 (minutes-in-row (lquery:$ tr "td" (eq 1) "div" (map (lambda (el) (lquery:$1 el (text)))))))
+    (when (= (length hour) 1)		; pad with 0
+      (setf hour (str:concat "0" hour)))
     (loop for minutes across minutes-in-row
 	  collect (str:concat hour ":" minutes))))
 
 (defun get-departure-time (time-table)
-  (lquery:$ time-table "tr" (gt 1) (map #'row-to-time)))
+  (alexandria:flatten (coerce (lquery:$ time-table "tr" (gt 1) (map #'row-to-time)) 'list)))
 
 
 (defmethod scrapycl:process ((spider bus-lines-spider)
