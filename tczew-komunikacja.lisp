@@ -97,19 +97,22 @@
   (print-unreadable-object (obj stream :type t)
     (format stream "station: ~A" (station obj))))
 
+
+(defun row-to-time (tr)
+  (let ((hour (lquery:$1 tr "td" (first) (text)))
+	(minutes-in-row (lquery:$ tr "td" (eq 1) "div" (map (lambda (el) (lquery:$1 el (text)))))))
+    (loop for minutes across minutes-in-row
+	  collect (str:concat hour ":" minutes))))
+
 (defun get-departure-time (time-table)
-  (lquery:$ (initialize time-table) ".table-three" "tr" (gt 1)
-	    (map (lambda (el)
-		   (list (lquery:$1 el "td" (first) (text))
-			 (lquery:$ el "td" (eq 1) (map (lambda (el)
-							 (lquery:$ el (text))))))))))
+  (lquery:$ time-table "tr" (gt 1) (map #'row-to-time)))
 
 
 (defmethod scrapycl:process ((spider bus-lines-spider)
 			     (st-req station-request))
   (multiple-value-bind (data url) (scrapycl:fetch spider st-req)
     (log:info url)
-    (log:info (get-departure-time data))
+    (log:info (get-departure-time (lquery:$ (initialize data) ".table-three")))
     (values)))
 
-					;(scrapycl:start (make-instance 'bus-lines-spider) :wait t)
+(scrapycl:start (make-instance 'bus-lines-spider) :wait t)
