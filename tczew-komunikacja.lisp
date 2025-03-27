@@ -53,11 +53,14 @@
 	    (bus-dir obj))))
 
 (defun parse-root-to-stations-req (lines-req url)
+  "Extract from root page url of bus lines route tables"
   (lquery:$ (initialize lines-req)
 	    "#routes" ".list-type" "a"
-	    (combine (lquery:$ (attr :href) (merge-url-with url)) (attr "title"))
+	    (combine
+	     (lquery:$1 (attr :href) (merge-url-with *url-root*))
+	     (attr "title"))
 	    (map-apply (lambda (route-page direction)
-    			 (make-bus-line-req (aref route-page 0) direction)))))
+    			 (make-bus-line-req route-page direction)))))
 
 ;; kurs url
 ;; kurs.php?kat=001_20250301&kier=1&nr=1&kurs=2&a=1
@@ -65,21 +68,23 @@
 (defmethod scrapycl:process ((spider bus-lines-spider)
     			     (request root-request))
   (multiple-value-bind (data url) (scrapycl:fetch spider request)
-    (coerce (parse-root-to-stations-req data url) 'list)))
+    (print (coerce (parse-root-to-stations-req data url) 'list))))
 
-(defun get-route-table-stations (table)
-  (lquery:$ table "a" (combine (attr :href) (text))))
+
+(defun get-route-table-stations (bus-req table)
+  "Extract from route table station name and the url for its time table"
+  (lquery:$ table "a"
+	    (combine
+	     (text)
+	     (lquery:$1 (attr :href) (merge-url-with *url-root*)))
+	    (map-apply (lambda (name href)
+			 (make-station-req bus-req name href)))))
 
 (defmethod scrapycl:process ((spider bus-lines-spider)
-			     (request bus-line-request))
-  (multiple-value-bind (data url) (scrapycl:fetch spider request)
-    (let* ((route-tables (lquery:$ (initialize data) ".route" (gt 1)))
-	   (stations (coerce (get-route-table-stations (aref route-tables 0)) 'list))
-	   (req '()))
-      (log:info (bus-nr request))
-      (dolist (st stations)
-	(push (make-station-req request (second st) (first st)) req))
-      req)))
+			     (bus-req bus-line-request))
+  (multiple-value-bind (data url) (scrapycl:fetch spider bus-req)
+    (let* ((route-tables (lquery:$ (initialize data) ".route" (gt 1))))
+      (list (first (coerce (get-route-table-stations bus-req (aref route-tables 0)) 'list))))))
 
 
 (defclass station ()
@@ -89,8 +94,19 @@
   (print-unreadable-object (obj stream :type t)
     (format stream "station: ~A" (station obj))))
 
+(defun get-departure-time (time-table)
+  (lquery:$ (initialize time-table) ".table-three" "tr" (gt 1)
+	    (map (lambda (el)
+		   (list (lquery:$1 el "td" (first) (text))
+			 (lquery:$ el "td" (eq 1) (map (lambda (el)
+							 (lquery:$ el (text))))))))))
+
+
 (defmethod scrapycl:process ((spider bus-lines-spider)
-			     (request station-request))
-  (list (make-instance 'station :station (bus-station request))))
+			     (st-req station-request))
+  (multiple-value-bind (data url) (scrapycl:fetch spider st-req)
+    (log:info url)
+    (log:info (get-departure-time data))
+    (values)))
 
 (scrapycl:start (make-instance 'bus-lines-spider) :wait t)
