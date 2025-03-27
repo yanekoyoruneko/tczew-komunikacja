@@ -52,7 +52,7 @@
 	    (scrapycl:request-url obj)
 	    (bus-dir obj))))
 
-(defun parse-root-to-stations-req (lines-req url)
+(defun parse-root-to-stations-req (lines-req)
   "Extract from root page url of bus lines route tables"
   (lquery:$ (initialize lines-req)
 	    "#routes" ".list-type" "a"
@@ -64,11 +64,11 @@
 
 ;; kurs url
 ;; kurs.php?kat=001_20250301&kier=1&nr=1&kurs=2&a=1
-
 (defmethod scrapycl:process ((spider bus-lines-spider)
     			     (request root-request))
   (multiple-value-bind (data url) (scrapycl:fetch spider request)
-    (print (coerce (parse-root-to-stations-req data url) 'list))))
+    (declare (ignore url))
+    (print (coerce (parse-root-to-stations-req data) 'list))))
 
 
 (defun get-route-table-stations (bus-req table)
@@ -83,7 +83,10 @@
 (defmethod scrapycl:process ((spider bus-lines-spider)
 			     (bus-req bus-line-request))
   (multiple-value-bind (data url) (scrapycl:fetch spider bus-req)
+    (declare (ignore url))
     (let* ((route-tables (lquery:$ (initialize data) ".route" (gt 1))))
+      ;; for now only the first route table
+      ;; the second one is in the opposite direction
       (list (first (coerce (get-route-table-stations bus-req (aref route-tables 0)) 'list))))))
 
 
@@ -109,4 +112,4 @@
     (log:info (get-departure-time data))
     (values)))
 
-(scrapycl:start (make-instance 'bus-lines-spider) :wait t)
+					;(scrapycl:start (make-instance 'bus-lines-spider) :wait t)
