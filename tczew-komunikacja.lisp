@@ -84,10 +84,10 @@
 
 ;; kurs url
 ;; kurs.php?kat=001_20250301&kier=1&nr=1&kurs=2&a=1
-
 (defun get-route-table-stations (bus-req table)
-  "Extract from route table station name and the url for its time table"
-  (lquery:$ table "a"
+  "Extract from route table station name and the url for its time table
+Wciecie 1 are alternate routes im ignoring for now"
+  (lquery:$ table "tr" "td" (not ".wciecie-1") "a"
 	    (combine
 	     (text)
 	     (lquery:$1 (attr :href) (merge-url-with *url-root*)))
@@ -137,6 +137,7 @@
 	unless (null prev-st)
 	  do (setf (departure prev-st) (name st))
 	finally (setf (departure st) last-station))
+      (print stations)
       stations)))
 
 
@@ -149,9 +150,12 @@
 			     (station-req station-request))
   (multiple-value-bind (data url) (scrapycl:fetch spider station-req)
     (log:info url)
-    (let ((table (get-departure-time (lquery:$ (initialize data) ".table-three"))))
-      (push (cons (cons (departure station-req) (bus-nr station-req)) table)
-	    (gethash (name station-req) *stations*)))
+    (let ((table (get-departure-time (lquery:$ (initialize data) ".table-three")))
+	  (connection (cons (departure station-req) (bus-nr station-req))))
+      (if (not (assoc (name station-req) *stations* :test 'equal))
+	  (setf *stations* (acons (name station-req) `((,connection . ,table)) *stations*))
+	  (let ((station-alist (assoc (name station-req) *stations* :test 'equal)))
+	    (rplacd (cdr station-alist) `((,connection . ,table))))))
     (values)))
 
 (scrapycl:start (make-instance 'bus-lines-spider) :wait t)
