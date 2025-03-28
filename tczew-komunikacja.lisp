@@ -118,7 +118,7 @@ Wciecie 1 are alternate routes im ignoring for now"
   (multiple-value-bind (data url) (scrapycl:fetch spider request)
     (declare (ignore url))
     ;; limit to one bus line
-    (parse-root-to-stations-req data)))
+    (list (aref (parse-root-to-stations-req data) 0))))
 
 
 (defmethod scrapycl:process ((spider bus-lines-spider)
@@ -137,19 +137,22 @@ Wciecie 1 are alternate routes im ignoring for now"
 	unless (null prev-st)
 	  do (setf (departure prev-st) (name st))
 	finally (setf (departure st) last-station))
-      (print stations)
       stations)))
-
 
 (defun get-departure-time (time-table)
   ;; first tr is the name of the "three-table" table
   (alexandria:flatten (coerce (lquery:$ time-table "tr" (gt 1) (map #'row-to-time)) 'list)))
 
-
-(defvar *stations-lock* (bt:make-lock "stations-lock"))
+(defclass connection ()
+  ((station :initarg :station :accessor station :type string)
+   (line :initarg :line :accessor line :type string)
+   (time-table :initarg :time-table :accessor station-time-table :type list)))
 
 (defun find-station (name)
   (assoc name *stations* :test 'equal))
+
+(defun get-connections (connection station)
+  (remove-if-not (lambda (con) (string= connection (caar con))) (cdr station)))
 
 (defun add-connection (name bus-line time-table)
   (let ((entry (find-station name)))
@@ -158,16 +161,22 @@ Wciecie 1 are alternate routes im ignoring for now"
 (defun new-station (name)
   (setf *stations* (acons name '() *stations*)))
 
+
 (defmethod scrapycl:process ((spider bus-lines-spider)
                              (station-req station-request))
   (multiple-value-bind (data url) (scrapycl:fetch spider station-req)
-    (log:info url)
     (let ((station-name (name station-req))
 	  (time-table (get-departure-time (lquery:$ (initialize data) ".table-three")))
           (bus-line (cons (departure station-req) (bus-nr station-req))))
       (when (not (find-station station-name))
 	(new-station station-name))
-      (add-connection station-name bus-line time-table)))
-  (values))
+      (log:info url)
+      (add-connection station-name bus-line time-table)
+      (list (make-instance 'station :name station-name :time-table (cons bus-line time-table))))))
 
-(scrapycl:start (make-instance 'bus-lines-spider) :wait t)
+(loop for station across (scrapycl:start (make-instance 'bus-lines-spider) :wait t)
+      do
+	 (when (not (find-station station-name))
+	   (new-station station-name))
+	 (log:info url)
+	 (add-connection station-name bus-line time-table))
