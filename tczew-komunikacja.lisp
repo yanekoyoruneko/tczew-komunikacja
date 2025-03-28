@@ -4,7 +4,7 @@
 
 
 (defparameter *url-root* "https://komunikacja.tczew.pl/")
-(defparameter *stations* (make-hash-table :test 'equal))
+(defparameter *stations* nil)
 
 (defclass root-request (scrapycl:request)
   ())
@@ -146,16 +146,28 @@ Wciecie 1 are alternate routes im ignoring for now"
   (alexandria:flatten (coerce (lquery:$ time-table "tr" (gt 1) (map #'row-to-time)) 'list)))
 
 
+(defvar *stations-lock* (bt:make-lock "stations-lock"))
+
+(defun find-station (name)
+  (assoc name *stations* :test 'equal))
+
+(defun add-connection (name bus-line time-table)
+  (let ((entry (find-station name)))
+    (push `(,bus-line . ,time-table) (cdr entry))))
+
+(defun new-station (name)
+  (setf *stations* (acons name '() *stations*)))
+
 (defmethod scrapycl:process ((spider bus-lines-spider)
-			     (station-req station-request))
+                             (station-req station-request))
   (multiple-value-bind (data url) (scrapycl:fetch spider station-req)
     (log:info url)
-    (let ((table (get-departure-time (lquery:$ (initialize data) ".table-three")))
-	  (connection (cons (departure station-req) (bus-nr station-req))))
-      (if (not (assoc (name station-req) *stations* :test 'equal))
-	  (setf *stations* (acons (name station-req) `((,connection . ,table)) *stations*))
-	  (let ((station-alist (assoc (name station-req) *stations* :test 'equal)))
-	    (rplacd (cdr station-alist) `((,connection . ,table))))))
-    (values)))
+    (let ((station-name (name station-req))
+	  (time-table (get-departure-time (lquery:$ (initialize data) ".table-three")))
+          (bus-line (cons (departure station-req) (bus-nr station-req))))
+      (when (not (find-station station-name))
+	(new-station station-name))
+      (add-connection station-name bus-line time-table)))
+  (values))
 
 (scrapycl:start (make-instance 'bus-lines-spider) :wait t)
