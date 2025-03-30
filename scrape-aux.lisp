@@ -50,7 +50,10 @@
 ;; kurs.php?kat=001_20250301&kier=1&nr=1&kurs=2&a=1
 (defun get-route-table-stations (bus-req table)
   "Extract from route table station name and the url for its time table
-Wciecie 1 are alternate routes im ignoring for now"
+Wciecie 1 are alternate routes tagged with A, C after time, im ignoring for now"
+  ;; There is also wciecie 2 that omiting links the Konarskiego station for line 7
+  ;; TCZEW-TRANSIT> (get-connections "Konarskiego" "Konarskiego")
+  ;; ((("Konarskiego" . 7) "07:45" "10:45" "13:45"))
   (lquery:$ table "tr" "td" (not ".wciecie-1") "a"
 	    (combine
 	     (text)
@@ -65,11 +68,14 @@ Wciecie 1 are alternate routes im ignoring for now"
 ;;; eq 1 this is the table from the 3 tables
 (defun row-to-time (tr)
   (let* ((hour (lquery:$1 tr "td" (first) (text)))
-	 (minute-divs (lquery:$ tr "td" (eq 1) "div")))
+	 (minute-divs (lquery:$ tr "td" (eq 1) "div"))
+	 (minute-divs2 (lquery:copy-proper-vector minute-divs)))
     (when (> (length minute-divs) 0)	; some rows are empty
       (when (= (length hour) 1)		; pad with 0
 	(setf hour (str:concat "0" hour)))
-      (loop for minutes across (lquery:$ minute-divs (map (lambda (el) (lquery:$1 el (text)))))
+      (loop for next across (lquery:$ minute-divs2 (map (lambda (el) (lquery:$1 el "a" (attr "onclick")))))
+	    do (print next))		; this needs to be send into scraping
+      (loop for minutes across (lquery:$ minute-divs (map (lambda (el) (lquery:$1 el "a" (text)))))
 	    collect (str:concat hour ":" minutes)))))
 
 

@@ -5,7 +5,7 @@
   (multiple-value-bind (data url) (scrapycl:fetch spider request)
     (declare (ignore url))
     ;; limit to one bus line
-    (parse-root-to-stations-req data)))
+    (list (aref (parse-root-to-stations-req data) 0))))
 
 
 (defmethod scrapycl:process ((spider bus-lines-spider)
@@ -24,7 +24,7 @@
 	unless (null prev-st)
 	  do (setf (departure prev-st) (name st))
 	finally (setf (departure st) last-station))
-      (serapeum:take 5 stations))))
+      (serapeum:take 1 stations))))
 
 (defclass connection ()
   ((start-station :initarg :start-station :accessor start-station :type string)
@@ -48,4 +48,4 @@
     initially (setf *stations* nil)
     for connection in (scrapycl:start (make-instance 'bus-lines-spider) :wait t)
     do (add-connection connection)
-    finally *stations*))
+    finally (return *stations*)))
