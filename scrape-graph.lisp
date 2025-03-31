@@ -5,7 +5,7 @@
   (multiple-value-bind (data url) (scrapycl:fetch spider request)
     (declare (ignore url))
     ;; limit to one bus line
-    (list (aref (parse-root-to-stations-req data) 0))))
+    (parse-root-to-stations-req data)))
 
 
 (defmethod scrapycl:process ((spider bus-lines-spider)
@@ -24,7 +24,7 @@
 	unless (null prev-st)
 	  do (setf (departure prev-st) (name st))
 	finally (setf (departure st) last-station))
-      (serapeum:take 1 stations))))
+      stations)))
 
 (defclass connection ()
   ((start-station :initarg :start-station :accessor start-station :type string)
@@ -42,6 +42,21 @@
 			   :start-station station-name
 			   :transit-line bus-line
 			   :time-table time-table)))))
+
+(defclass arrive-time ()
+  ((minutes :initarg :minutes :accessor arrive-time-minutes :type int)))
+
+(defmethod scrapycl:process ((spider arrive-time-spider)
+                             (arrive-time-req arrive-time-request))
+  "Extracts arrive time to the next station."
+  (multiple-value-bind (data url) (scrapycl:fetch spider arrive-time-req)
+    (declare (ignore url))
+    ;; the row with the next station is the one after the first one highlighteed
+    (list (make-instance 'arrive-time :minutes
+			 (parse-integer (lquery:$1 (initialize data) "tr" (has "[color=\"#000\"]") (eq 1)
+						   "td" (eq 2) (text))
+					:junk-allowed t)))))
+
 
 (defun scrape ()
   (loop

@@ -7,6 +7,9 @@
   (:default-initargs
    :initial-requests (list (make-instance 'root-request :url *url-root*))))
 
+(defclass arrive-time-spider (scrapycl:spider)
+  ())
+
 (defclass root-request (scrapycl:request)
   ())
 
@@ -24,6 +27,9 @@
 	 :reader name)
    (departure :initarg :departure
 	      :accessor departure)))
+
+(defclass arrive-time-request (scrapycl:request)
+  ())
 
 (defun make-bus-line-req (page direction)
   (make-instance 'bus-line-request
@@ -46,8 +52,6 @@
   ;; trim the ^ from ^Station Name
   (str:trim (lquery:$1 table "tr" (last) "[style*=\"font-weight: bold;\"]" (text))))
 
-;; kurs url
-;; kurs.php?kat=001_20250301&kier=1&nr=1&kurs=2&a=1
 (defun get-route-table-stations (bus-req table)
   "Extract from route table station name and the url for its time table
 Wciecie 1 are alternate routes tagged with A, C after time, im ignoring for now"
@@ -65,20 +69,43 @@ Wciecie 1 are alternate routes tagged with A, C after time, im ignoring for now"
 					:line-nr (bus-nr bus-req)
 					:direction (bus-dir bus-req))))))
 
-;;; eq 1 this is the table from the 3 tables
+;; kurs url
+;; kurs.php?kat=001_20250301&kier=1&nr=1&kurs=2&a=1
+(defconstant +kurs-fn-regex+ "kurs\\('([^']+)',\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*,\\s*([0-9]+)\\)")
+(defconstant +kurs-php-req+ "kurs.php?kat=~a&kier=~a&nr=~a&kurs=~a&a=1")
+(defun get-arrive-time-req (arrive-table-links)
+  (let ((onclick (lquery:$ arrive-table-links
+			   (map(lambda (el) (lquery:$1 el (attr "onclick")))))))
+    (coerce
+     (lquery:$ onclick (map (lambda (link)
+			      (ppcre:register-groups-bind (a b c d)
+				  (+kurs-fn-regex+ link)
+				(make-instance 'arrive-time-request :url
+					       (str:concat *url-root*
+							   (format nil +kurs-php-req+ a b c d)))))))
+     'list)))
+
 (defun row-to-time (tr)
   (let* ((hour (lquery:$1 tr "td" (first) (text)))
 	 (minute-divs (lquery:$ tr "td" (eq 1) "div"))
-	 (minute-divs2 (lquery:copy-proper-vector minute-divs)))
-    (when (> (length minute-divs) 0)	; some rows are empty
-      (when (= (length hour) 1)		; pad with 0
+	 (arrive-table-links (lquery:$ tr "td" (eq 1) "div" "a")))
+    (when (< 0 (length minute-divs))	; some rows are empty
+      (when (= 1 (length hour))		; pad with 0
 	(setf hour (str:concat "0" hour)))
-      (loop for next across (lquery:$ minute-divs2 (map (lambda (el) (lquery:$1 el "a" (attr "onclick")))))
-	    do (print next))		; this needs to be send into scraping
-      (loop for minutes across (lquery:$ minute-divs (map (lambda (el) (lquery:$1 el "a" (text)))))
-	    collect (str:concat hour ":" minutes)))))
+      ;; scrape this
+      (let
+	  ((arrive-times (mapcar
+			  #'arrive-time-minutes
+			  (scrapycl:start (make-instance 'arrive-time-spider
+							 :initial-requests
+							 (get-arrive-time-req arrive-table-links))
+					  :wait t))))
+	(loop for minutes across (lquery:$ minute-divs (map (lambda (el) (lquery:$1 el "a" (text)))))
+	      for arrive in arrive-times
+	      collect (cons (str:concat hour ":" minutes) arrive))))))
 
 
 (defun get-departure-time (time-table)
   ;; first tr is the name of the "three-table" table
-  (alexandria:flatten (coerce (lquery:$ time-table "tr" (gt 1) (map #'row-to-time)) 'list)))
+  (mapcan #'(lambda (el) el)
+	  (coerce (lquery:$ time-table "tr" (gt 1) (map #'row-to-time)) 'list)))
