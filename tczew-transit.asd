@@ -6,7 +6,7 @@
   :license  "Specify license here"
   :version "0.0.1"
   :serial t
-  :depends-on (#:scrapycl)
+  :depends-on (#:scrapycl #:alexandria)
   :components ((:file "package")
 	       (:file "transit-graph")
 	       (:file "scrape-aux")

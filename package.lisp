@@ -1,4 +1,5 @@
 ;;;; package.lisp
 
 (defpackage #:tczew-transit
-	    (:use #:cl))
+  (:use #:cl)
+  (:local-nicknames (#:al #:alexandria)))
