@@ -1,62 +1,11 @@
 (in-package #:tczew-transit)
 
-
-(defparameter +url-root+ "https://komunikacja.tczew.pl/"
-  "Website contains bus lines numbers, directions and links to time tables.")
-
 (defconstant +kurs-fn-regex+ "kurs\\('([^']+)',\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*,\\s*([0-9]+)\\)"
   "Matches kurs() onclick function parameters of time table.")
 
+
 (defconstant +kurs-php-req+ "kurs.php?kat=~a&kier=~a&nr=~a&kurs=~a&a=1"
   "Request template to rozklad.php.")
-
-
-(defclass root-request (scrapycl:request)
-  ())
-
-
-(defclass bus-lines-spider (scrapycl:spider)
-  "From this spider the entire scraping starts. The first requests extracts
-information about bus lines."
-  ()
-  (:default-initargs
-   :initial-requests (list (make-instance 'root-request :url +url-root+))))
-
-
-(defclass arrive-time-spider (scrapycl:spider)
-  "This spider extracts from rozklad.php the arrive times to the following station."
-  ())
-
-
-
-(defclass bus-line-request (scrapycl:request)
-  "Request to scrape the time table of bus line."
-  ((line-nr :initarg :line-nr
-    	    :type int
-    	    :reader bus-nr)
-   (direction :initarg :direction
-    	      :type string
-    	      :reader bus-dir)))
-
-
-(defclass station-request (bus-line-request)
-  ((name :initarg :name
-	 :type string
-	 :reader name)
-   (departure :initarg :departure
-	      :accessor departure)))
-
-
-(defclass arrive-time-request (scrapycl:request)
-  ())
-
-
-(defun make-bus-line-req (page direction)
-  "The time table of bus line contains its line number which gets extracted here."
-  (make-instance 'bus-line-request
-    		 :url page
-    		 :line-nr (parse-integer (cl-ppcre:scan-to-strings "\\d+" page))
-    		 :direction (str:trim direction)))
 
 
 (defun parse-root-to-stations-req (lines-req)
@@ -77,7 +26,7 @@ information about bus lines."
 
 
 (defun get-route-table-stations (bus-req table)
-  "Extract from route table station name and the url for its time table
+  "Extract from route table station name and the url for its time-table
 Wciecie 1 are alternate routes tagged with A, C after time, im ignoring for now."
   ;; There is also wciecie 2 that omiting links the Konarskiego station for line 7
   ;; TCZEW-TRANSIT> (get-connections "Konarskiego" "Konarskiego")
@@ -119,7 +68,7 @@ Example query made by spider: kurs.php?kat=001_20250301&kier=1&nr=1&kurs=2&a=1"
 
 
 (defun row-to-time (tr)
-  "Extracts the departure and arrive times from the row of bus line time table."
+  "Extracts the departure and arrive times from the row of bus line time-table."
   (let* ((hour (lquery:$1 tr "td" (first) (text)))
 	 (minute-divs (lquery:$ tr "td" (eq 1) "div"))
 	 (arrive-table-links (lquery:$ tr "td" (eq 1) "div" "a")))
@@ -132,7 +81,8 @@ Example query made by spider: kurs.php?kat=001_20250301&kier=1&nr=1&kurs=2&a=1"
 
 
 (defun get-departure-times (time-table)
-  "For each row of the time table extracts the departure and arrive time.
+  "For each row of the time-table extracts the departure and arrive time.
 row-to-time needs flattening mapcan"
   (mapcan #'(lambda (el) el)
+
 	  (coerce (lquery:$ time-table "tr" (gt 1) (map #'row-to-time)) 'list)))

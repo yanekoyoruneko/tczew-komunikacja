@@ -1,5 +1,6 @@
 (in-package #:tczew-transit)
 
+
 (defmethod scrapycl:process ((spider bus-lines-spider)
     			     (request root-request))
   (multiple-value-bind (data url) (scrapycl:fetch spider request)

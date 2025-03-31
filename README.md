@@ -1,9 +1,8 @@
 # tczew-komunikacja
-### _Your Name <your.name@example.com>_
+### YANEKO YORUNEKO
 
-This is a project to do ... something.
+Scraping tczew bus transit to provide better search functionality.
 
 ## License
 
-Specify license here
-
+MIT

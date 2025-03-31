@@ -8,6 +8,7 @@
   :serial t
   :depends-on (#:scrapycl #:alexandria)
   :components ((:file "package")
-	       (:file "transit-graph")
-	       (:file "scrape-aux")
-               (:file "scrape-graph")))
+	       (:file "query")
+	       (:file "scrape/request")
+	       (:file "scrape/aux")
+	       (:file "scrape/process")))
