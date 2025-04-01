@@ -1,4 +1,7 @@
-(in-package #:tczew-transit)
+;;;
+;;; Functions for building the graph represented by alist of lists
+;;;
+(in-package #:pl.tczew.transit)
 
 (defparameter *stations* nil)
 
@@ -15,10 +18,16 @@
       (find-station from)))
 
 (defun add-connection (connection)
+  (check-type connection connection)
   (when (not (find-station (start-station connection)))
     (setf *stations* (acons (start-station connection) '() *stations*)))
   (push `(,(transit-line connection) . ,(time-table connection))
         (cdr (find-station (start-station connection)))))
+
+(defun time-to-int (str)
+  (check-type str string)
+  (+ (* (parse-integer (subseq str 0 2)) 60)
+     (parse-integer (subseq str 3 5))))
 
 (defun count-connections ()
   (loop for station in *stations*

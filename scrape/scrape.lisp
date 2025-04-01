@@ -1,7 +1,7 @@
 ;;;
 ;;; Scrape helpers.
 ;;;
-(in-package #:tczew-transit)
+(in-package #:pl.tczew.transit)
 
 (defconstant +kurs-fn-regex+ "kurs\\('([^']+)',\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*,\\s*([0-9]+)\\)"
   "Match 'kurs()' onclick function params which are used to query kurs.php.")

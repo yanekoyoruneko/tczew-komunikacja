@@ -1,7 +1,7 @@
 ;;;
 ;;; Requests and spider definitions.
 ;;;
-(in-package #:tczew-transit)
+(in-package #:pl.tczew.transit)
 
 (defparameter +url-root+ "https://komunikacja.tczew.pl/"
   "Website contains bus lines numbers, directions and links to time tables.")

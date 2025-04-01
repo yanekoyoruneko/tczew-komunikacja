@@ -2,14 +2,17 @@
 ;;; Main scraping pipeline.
 ;;;
 
-(in-package #:tczew-transit)
+(in-package #:pl.tczew.transit)
 
 (defun scrape ()
   (loop
     initially (setf *stations* nil)
     for connection in (scrapycl:start (make-instance 'bus-spider) :wait t)
     do (add-connection connection)
-    finally (return *stations*)))
+    finally
+       (with-open-file (out "graph.txt" :direction :output :if-exists :supersede)
+         (print *stations* out))
+       (return *stations*)))
 
 (defmethod scrapycl:process ((spider bus-spider)
                              (request root-request))
