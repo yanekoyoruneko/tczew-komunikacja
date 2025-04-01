@@ -30,12 +30,9 @@
   "Return list of time-table-reqs for each station of bus line."
   (multiple-value-bind (data url) (scrapycl:fetch spider route-req)
     (declare (ignore url))
-    ;;--- TODO: for now only the first route table
-    ;; the second one is in the opposite direction
-    (let* ((route-tables (lquery:$ (initialize data) ".route" (gt 1))))
-      ;; set departure station
-      (loop for table across route-tables
-            collect (scrape-route-table route-req table)))))
+    ;; some bus-lines are cycle and some have 2 route tables in the other direction
+    (loop for table across (lquery:$ (initialize data) ".route" (gt 1))
+          collect (scrape-route-table route-req table))))
 
 (defclass connection ()
   ((start-station :initarg :start-station :accessor start-station :type string
