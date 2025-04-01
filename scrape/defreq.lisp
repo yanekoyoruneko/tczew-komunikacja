@@ -39,7 +39,11 @@
                  :documentation "Station name of time table for bus line.")
    (departure :initarg :departure
               :accessor departure
-              :documentation "The next destination of bus line."))
+              :documentation "The next destination of bus line.")
+   (time-suffix :initarg :time-suffix
+                :type string
+                :reader time-suffix
+                :documentation "Filter times that don't match this suffix."))
   (:documentation "Request to scrape time-table of station from route-table."))
 
 

@@ -15,15 +15,19 @@
   ;; trim the ^ from ^Station Name
   (str:trim (lquery:$1 table "tr" (last) "[style*=\"font-weight: bold;\"]" (text))))
 
-(defun scrape-time-table-reqs (route-table-req route-table)
-  "Return array of time-table-requests ready to query bus time-tables."
-  ;; Wciecie 1 are alternate routes tagged with A, C after time, im ignoring for now.
-  ;; There is also wciecie 2 that omiting links the Konarskiego station for line 7
-  ;; TCZEW-TRANSIT> (get-connections "Konarskiego" "Konarskiego")
-  ;; ((("Konarskiego" . 7) "07:45" "10:45" "13:45"))
-  (check-type route-table-req route-table-request)
-  (check-type route-table plump:element)
-  (lquery:$ route-table "tr" "td" (not ".wciecie-1") "a"
+(defun scrape-route-split-point (route-table)
+  "Return the station name from which the route splits."
+  ;; split point is the station at which there is alternate route
+  ;; this is the first station before .wciecie-1 or .wciecie-2
+  ;; wciecie-2 has to be first here
+  (lquery:$1 route-table "tr" ".wciecie-2, .wciecie-1" (parent) (prev) "a"
+             (combine
+              (text)
+              (lquery:$1 (attr :href) (merge-url-with +url-root+)))))
+
+(defun scrape-primary-route (route-table-req route-table split-point)
+  "Return time-table-requests for the primary route ignoring any alternate A, B routes."
+  (lquery:$ route-table "tr" "td" (not ".wciecie-1") (not ".wciecie-2") "a"
             (combine
              (text)
              (lquery:$1 (attr :href) (merge-url-with +url-root+)))
@@ -32,7 +36,26 @@
                                         :url href
                                         :name name
                                         :line-nr (bus-nr route-table-req)
-                                        :direction (bus-dir route-table-req))))))
+                                        :direction (bus-dir route-table-req)
+                                        ;; ignore the alternate route
+                                        :time-suffix (if (string= split-point name)
+                                                         ""
+                                                         nil))))))
+
+(defun scrape-alternate-route  (route-table-req route-table split-point)
+  )
+
+(defun scrape-time-table-reqs (route-table-req route-table)
+  "Return array of time-table-requests ready to query bus time-tables."
+  ;; Wciecie 1 are alternate routes tagged with A, C after time, im ignoring for now.
+  ;; There is also wciecie 2 that omiting links the Konarskiego station for line 7
+  ;; TCZEW-TRANSIT> (get-connections "Konarskiego" "Konarskiego")
+  ;; ((("Konarskiego" . 7) "07:45" "10:45" "13:45"))
+  (check-type route-table-req route-table-request)
+  (check-type route-table plump:element)
+  (let ((split-point (scrape-route-split-point route-table)))
+    (scrape-primary-route route-table-req route-table (first split-point))))
+
 
 (defun scrape-route-table (route-req route-table)
   "Return time-table-requests for route-table."
@@ -74,7 +97,7 @@
                            (coerce (make-arrive-time-reqs arrive-table-links) 'list))
                           :wait t)))
 
-(defun process-row-to-time (tr)
+(defun process-row-to-time (tr time-suffix)
   "Return the (departure . arrive) list of cons from the row of bus line time-table."
   (let* ((hour (lquery:$1 tr "td" (first) (text)))
          ;; there are 3 columns for each type of day
@@ -87,10 +110,15 @@
         (setf hour (str:concat "0" hour)))
       (loop for minutes across (lquery:$ minute-divs (map (lambda (el) (lquery:$1 el "a" (text)))))
             for arrive in (scrape-arrive-times arrive-table-links)
-            collect (cons (str:concat hour ":" minutes) arrive)))))
+            when (or (not time-suffix) (string= (subseq minutes 2) time-suffix))
+              collect (cons (str:concat hour ":" minutes) arrive)))))
 
-(defun get-departure-times (time-table)
+(defun scrape-times (time-table departure time-suffix)
   "For each row of the time-table extracts the departure and arrive time.
 row-to-time needs flattening mapcan"
   (mapcan #'(lambda (el) el)
-          (coerce (lquery:$ time-table "tr" (gt 1) (map #'process-row-to-time)) 'list)))
+          (coerce (lquery:$ time-table
+                            "tr"
+                            (gt 1)
+                            (map #'(lambda (el) (process-row-to-time el time-suffix))))
+                  'list)))

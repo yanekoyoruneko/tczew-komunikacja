@@ -19,13 +19,14 @@
   "Return list of route-table-requests for each bus line."
   (multiple-value-bind (data url) (scrapycl:fetch spider request)
     (declare (ignore url))
-    (serapeum:take 1 (lquery:$ (initialize data)
-                               "#routes" ".list-type" "a"
-                               (combine
-                                (lquery:$1 (attr :href) (merge-url-with +url-root+))
-                                (attr "title"))
-                               (map-apply (lambda (route-page direction)
-                                            (make-route-table-req route-page direction)))))))
+    (list (aref (lquery:$ (initialize data)
+                          "#routes" ".list-type" "a"
+                          (combine
+                           (lquery:$1 (attr :href) (merge-url-with +url-root+))
+                           (attr "title"))
+                          (map-apply (lambda (route-page direction)
+                                       (make-route-table-req route-page direction))))
+                1))))
 
 
 (defmethod scrapycl:process ((spider bus-spider)
@@ -52,8 +53,11 @@
   "Return list of connections from departure station of time-req."
   (multiple-value-bind (data url) (scrapycl:fetch spider time-req)
     (let ((station-name (station-name time-req))
-          (time-table (get-departure-times (lquery:$ (initialize data) ".table-three")))
+          (time-table (scrape-times (lquery:$ (initialize data) ".table-three")
+                                    (departure time-req)
+                                    (time-suffix time-req)))
           (bus-line (cons (departure time-req) (bus-nr time-req))))
+      (format t "~a: ~a" (station-name time-req) (time-suffix time-req))
       (log:info "PROCESSING: " url)
       (list (make-instance 'connection
                            :start-station station-name
