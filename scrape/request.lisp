@@ -4,7 +4,7 @@
   "Website contains bus lines numbers, directions and links to time tables.")
 
 
-(defclass bus-lines-spider (scrapycl:spider)
+(defclass bus-spider (scrapycl:spider)
   ()
   (:documentation  "The first requests extracts information about bus lines.")
   (:default-initargs
@@ -20,7 +20,7 @@
   ())
 
 
-(defclass bus-line-request (scrapycl:request)
+(defclass route-table-request (scrapycl:request)
   ((line-nr :initarg :line-nr
     	    :type int
     	    :reader bus-nr)
@@ -30,22 +30,21 @@
   (:documentation "Request to scrape the time-table of bus line."))
 
 
-
-(defclass station-request (bus-line-request)
-  ((name :initarg :name
-	 :type string
-	 :reader name)
+(defclass time-table-request (route-table-request)
+  ((station-name :initarg :name
+                 :type string
+                 :reader station-name)
    (departure :initarg :departure
-	      :accessor departure)))
+              :accessor departure)))
 
 
 (defclass arrive-time-request (scrapycl:request)
   ())
 
 
-(defun make-bus-line-req (page direction)
+(defun make-route-table-req (page direction)
   "The time-table of bus line contains its line number which gets extracted here."
-  (make-instance 'bus-line-request
-    		 :url page
-    		 :line-nr (parse-integer (cl-ppcre:scan-to-strings "\\d+" page))
-    		 :direction (str:trim direction)))
+  (make-instance 'route-table-request
+                 :url page
+                 :line-nr (parse-integer (cl-ppcre:scan-to-strings "\\d+" page))
+                 :direction (str:trim direction)))
