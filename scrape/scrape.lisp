@@ -15,6 +15,10 @@
   ;; trim the ^ from ^Station Name
   (str:trim (lquery:$1 table "tr" (last) "[style*=\"font-weight: bold;\"]" (text))))
 
+(defun scrape-last-alt-station-name (table)
+  "Return the point where alternate route joins with the primary route."
+  (str:trim (lquery:$1 table "tr" ".wciecie-1" (last) (parent) (next) (text))))
+
 (defun scrape-route-split-point (route-table)
   "Return the station name from which the route splits."
   ;; split point is the station at which there is alternate route
@@ -42,10 +46,30 @@
                                                          ""
                                                          nil))))))
 
-(defun scrape-alternate-route  (route-table-req route-table split-point)
-  )
+(defun scrape-alternate-time-table-reqs  (route-table-req route-table split-point)
+  (let ((first-station (make-instance 'time-table-request
+                                      :url (second split-point)
+                                      :name (first split-point)
+                                      :line-nr (bus-nr route-table-req)
+                                      :direction (bus-dir route-table-req)
+                                      ;; ignore the alternate route
+                                      :time-suffix nil)))
+    (concatenate 'vector
+                 first-station
+                 (lquery:$ route-table "tr" "td" ".wciecie-1" "a"
+                           (combine
+                            (text)
+                            (lquery:$1 (attr :href) (merge-url-with +url-root+)))
+                           (map-apply (lambda (name href)
+                                        (make-instance 'time-table-request
+                                                       :url href
+                                                       :name name
+                                                       :line-nr (bus-nr route-table-req)
+                                                       :direction (bus-dir route-table-req)
+                                                       ;; ignore the alternate route
+                                                       :time-suffix nil)))))))
 
-(defun scrape-time-table-reqs (route-table-req route-table)
+(defun scrape-primary-time-table-reqs (route-table-req route-table)
   "Return array of time-table-requests ready to query bus time-tables."
   ;; Wciecie 1 are alternate routes tagged with A, C after time, im ignoring for now.
   ;; There is also wciecie 2 that omiting links the Konarskiego station for line 7
@@ -56,13 +80,8 @@
   (let ((split-point (scrape-route-split-point route-table)))
     (scrape-primary-route route-table-req route-table (first split-point))))
 
-
-(defun scrape-route-table (route-req route-table)
-  "Return time-table-requests for route-table."
-  (check-type route-req route-table-request)
-  (check-type route-table plump:element)
+(defun link-route-table-reqs (station-time-tables last-station-name)
   (loop
-    with station-time-tables = (scrape-time-table-reqs route-req route-table)
     for prev-table = time-table
     for time-table across station-time-tables
     ;; route table is vector of the following destinations
@@ -71,8 +90,20 @@
       do (setf (departure prev-table)
                (station-name time-table))
     finally (setf (departure time-table)
-                  (scrape-last-station-name route-table))
+                  last-station-name)
             (return station-time-tables)))
+
+
+(defun scrape-route-table (route-req route-table)
+  "Return time-table-requests for route-table."
+  (check-type route-req route-table-request)
+  (check-type route-table plump:element)
+  (format t "LAST ALT: ~a~%" (scrape-last-alt-station-name route-table))
+  (list (link-route-table-reqs (scrape-primary-time-table-reqs route-req route-table)
+                               (scrape-last-station-name route-table))
+        ;; (link-route-table-reqs (scrape-alternate-time-table-reqs route-req route-table)
+        ;;                        (scrape-last-alt-station-name route-table))
+        ))
 
 (defun make-arrive-time-reqs (arrive-table-links)
   "Return array of arrive-time-request objects ready to query kurs.php."
