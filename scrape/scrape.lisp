@@ -47,27 +47,28 @@
                                                          nil))))))
 
 (defun scrape-alternate-time-table-reqs  (route-table-req route-table split-point)
-  (let ((first-station (make-instance 'time-table-request
-                                      :url (second split-point)
-                                      :name (first split-point)
-                                      :line-nr (bus-nr route-table-req)
-                                      :direction (bus-dir route-table-req)
-                                      ;; ignore the alternate route
-                                      :time-suffix nil)))
+  (let ((first-station (vector (make-instance 'time-table-request
+                                              :url (second split-point)
+                                              :dont-filter t
+                                              :name (first split-point)
+                                              :line-nr (bus-nr route-table-req)
+                                              :direction (bus-dir route-table-req)
+                                              ;; ignore the alternate route
+                                              :time-suffix "A"))))
     (concatenate 'vector
                  first-station
-                 (lquery:$ route-table "tr" "td" ".wciecie-1" "a"
-                           (combine
-                            (text)
-                            (lquery:$1 (attr :href) (merge-url-with +url-root+)))
-                           (map-apply (lambda (name href)
-                                        (make-instance 'time-table-request
-                                                       :url href
-                                                       :name name
-                                                       :line-nr (bus-nr route-table-req)
-                                                       :direction (bus-dir route-table-req)
-                                                       ;; ignore the alternate route
-                                                       :time-suffix nil)))))))
+                 (lquery:$ route-table "tr" ".wciecie-1" "a"
+                   (combine
+                    (text)
+                    (lquery:$1 (attr :href) (merge-url-with +url-root+)))
+                   (map-apply (lambda (name href)
+                                (make-instance 'time-table-request
+                                               :url href
+                                               :name name
+                                               :line-nr (bus-nr route-table-req)
+                                               :direction (bus-dir route-table-req)
+                                               ;; ignore the alternate route
+                                               :time-suffix nil)))))))
 
 (defun scrape-primary-time-table-reqs (route-table-req route-table)
   "Return array of time-table-requests ready to query bus time-tables."
@@ -98,12 +99,14 @@
   "Return time-table-requests for route-table."
   (check-type route-req route-table-request)
   (check-type route-table plump:element)
-  (format t "LAST ALT: ~a~%" (scrape-last-alt-station-name route-table))
-  (list (link-route-table-reqs (scrape-primary-time-table-reqs route-req route-table)
-                               (scrape-last-station-name route-table))
-        ;; (link-route-table-reqs (scrape-alternate-time-table-reqs route-req route-table)
-        ;;                        (scrape-last-alt-station-name route-table))
-        ))
+  (let ((split-point (scrape-route-split-point route-table)))
+    (concatenate 'vector
+                 (link-route-table-reqs
+                  (scrape-alternate-time-table-reqs route-req route-table split-point)
+                  (scrape-last-alt-station-name route-table))
+                 (link-route-table-reqs
+                  (scrape-primary-route route-req route-table (first split-point))
+                  (scrape-last-station-name route-table)))))
 
 (defun make-arrive-time-reqs (arrive-table-links)
   "Return array of arrive-time-request objects ready to query kurs.php."

@@ -9,6 +9,7 @@
     initially (setf *stations* nil)
     for connection in (scrapycl:start (make-instance 'bus-spider) :wait t)
     do (add-connection connection)
+       (print (start-station connection))
     finally
        (with-open-file (out "graph.txt" :direction :output :if-exists :supersede)
          (print *stations* out))
