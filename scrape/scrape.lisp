@@ -3,10 +3,14 @@
 ;;;
 (in-package #:pl.tczew.transit)
 
-(defconstant +kurs-fn-regex+ "kurs\\('([^']+)',\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*,\\s*([0-9]+)\\)"
+(al:define-constant +kurs-fn-regex+ "kurs\\('([^']+)',\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*,\\s*([0-9]+)\\)"
+  :test #'string=
+  :documentation
   "Match 'kurs()' onclick function params which are used to query kurs.php.")
 
-(defconstant +kurs-php-req+ "kurs.php?kat=~a&kier=~a&nr=~a&kurs=~a&a=1"
+(al:define-constant +kurs-php-req+ "kurs.php?kat=~a&kier=~a&nr=~a&kurs=~a&a=1"
+  :test #'string=
+  :documentation
   "Request template to kurs.php with 4 parameters.")
 
 (defun scrape-last-station-name (table)
@@ -47,16 +51,15 @@
                                                          nil))))))
 
 (defun scrape-alternate-time-table-reqs  (route-table-req route-table split-point)
-  (let ((first-station (vector (make-instance 'time-table-request
-                                              :url (second split-point)
-                                              :dont-filter t
-                                              :name (first split-point)
-                                              :line-nr (bus-nr route-table-req)
-                                              :direction (bus-dir route-table-req)
-                                              ;; ignore the alternate route
-                                              :time-suffix "A"))))
+  (let ((first-station (make-instance 'time-table-request
+                                      :url (second split-point)
+                                      :dont-filter t
+                                      :name (first split-point)
+                                      :line-nr (bus-nr route-table-req)
+                                      :direction (bus-dir route-table-req)
+                                      :time-suffix "A")))
     (concatenate 'vector
-                 first-station
+                 (vector first-station)
                  (lquery:$ route-table "tr" ".wciecie-1" "a"
                    (combine
                     (text)
@@ -94,7 +97,6 @@
                   last-station-name)
             (return station-time-tables)))
 
-
 (defun scrape-route-table (route-req route-table)
   "Return time-table-requests for route-table."
   (check-type route-req route-table-request)
@@ -112,15 +114,15 @@
   "Return array of arrive-time-request objects ready to query kurs.php."
   (check-type arrive-table-links vector)
   (let ((onclick (lquery:$ arrive-table-links
-                           (map(lambda (el) (lquery:$1 el (attr "onclick")))))))
+                   (map(lambda (el) (lquery:$1 el (attr "onclick")))))))
     (lquery:$ onclick (map (lambda (link)
                              ;; get onclick attribute a, b, c, d
                              ;; parameters to query rozklad.php
                              (ppcre:register-groups-bind (a b c d)
                                  (+kurs-fn-regex+ link)
                                (format nil +kurs-php-req+ a b c d))))
-              (merge-url-with +url-root+)
-              (map (lambda (url) (make-instance 'arrive-time-request :url url))))))
+      (merge-url-with +url-root+)
+      (map (lambda (url) (make-instance 'arrive-time-request :url url))))))
 
 (defun scrape-arrive-times (arrive-table-links)
   "Return list of arrive times. "
@@ -152,7 +154,7 @@
 row-to-time needs flattening mapcan"
   (mapcan #'(lambda (el) el)
           (coerce (lquery:$ time-table
-                            "tr"
-                            (gt 1)
-                            (map #'(lambda (el) (process-row-to-time el time-suffix))))
+                    "tr"
+                    (gt 1)
+                    (map #'(lambda (el) (process-row-to-time el time-suffix))))
                   'list)))
