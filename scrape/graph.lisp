@@ -24,11 +24,6 @@
   (push `(,(transit-line connection) . ,(time-table connection))
         (cdr (find-station (start-station connection)))))
 
-(defun time-to-int (str)
-  (check-type str string)
-  (+ (* (parse-integer (subseq str 0 2)) 60)
-     (parse-integer (subseq str 3 5))))
-
 (defun count-connections ()
   (loop for station in *stations*
         for connections = (cdr station) do

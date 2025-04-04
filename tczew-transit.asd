@@ -11,4 +11,5 @@
                (:file "scrape/graph")
                (:file "scrape/defreq")
                (:file "scrape/scrape")
-               (:file "scrape/process")))
+               (:file "scrape/process")
+               (:file "solve/query")))
