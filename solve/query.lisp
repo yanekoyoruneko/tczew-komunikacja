@@ -52,23 +52,21 @@
                (not (gethash station is-visited)))
              (mark-visited (station)
                (setf (gethash station is-visited) t))
-             (closest (dist)
-               (loop :for k :being :the :hash-key
-                       :using (hash-value v) :of dist
-                     :with min-key = nil
-                     :with min-val = nil
-                     :if (and (is-unvisited k) (or (null min-val) (< v min-val)))
-                       :do (setf min-key k
-                                 min-val v)
-                     :finally (return (cons min-key min-val))))
+             (closest (distances)           ; the closest vertex found until now
+               (let ((best most-positive-fixnum) name)
+                 (maphash (lambda (st dist)
+                            (when (and (is-unvisited st) (< dist best))
+                              (setf best dist)
+                              (setf name st)))
+                          distances)
+                 (cons name best)))
              (next-departure (time-table at-time)
                (car (remove-if-not (lambda (el)
                                      (>= (car el) at-time))
                                    time-table)))
-             (transit-cost (departure at-time)
-               (+ (abs (- at-time (car departure)))
-                  (cdr departure)
-                  at-time)))
+             (transit-cost (departure)  ; departure time + travel time
+               (+ (car departure) (cdr departure))))
+
       ;; setup distances
       (loop :with beg-exists = nil
             :for station :being :the :hash-key :in graph
@@ -78,6 +76,7 @@
                             most-positive-fixnum)
             :do (setf (gethash station distance-to) dist)
             :finally (or beg-exists (error "Beginning station does not exist.")))
+
       ;; graph structure:
       ;; [station-name] = [possible-destinations] = ((transit-line-nr . time-table) ...)
       ;; time-table is (departure-time . travel-time)
@@ -85,26 +84,25 @@
       (loop :repeat (hash-table-count graph)
             :for (station . now) = (closest distance-to)
             :until (string= station target)
-            :do
-               (loop :for destination :being :the :hash-key
-                       :using (hash-value transit-lines) :of (gethash station graph)
-                     :when (is-unvisited destination)
-                       :do
-                          (loop :for line :in transit-lines
-                                :for line-number = (car line)
-                                :for departure = (next-departure (cdr line) now)
-                                :for cost = (and departure (transit-cost departure now))
-                                ;; found better route
-                                :when (and departure (> (gethash destination distance-to) cost))
-                                  :do (setf (gethash destination distance-to) cost)
-                                      ;; update trace
-                                      (setf (gethash destination trace)
-                                            (list station line-number now departure cost))))
+            :do (maphash (lambda (destination transit-lines)
+                           (when (is-unvisited destination)
+                             (loop :for line :in transit-lines
+                                   :for line-number = (car line)
+                                   :for departure = (next-departure (cdr line) now)
+                                   :for cost = (and departure (transit-cost departure))
+                                   ;; found better route
+                                   :when (and departure (> (gethash destination distance-to) cost))
+                                     :do (setf (gethash destination distance-to) cost)
+                                         ;; update trace
+                                         (setf (gethash destination trace)
+                                               (list station line-number now departure cost)))))
+                         (gethash station graph))
             :do (mark-visited station)
             :finally
                (or (and (not (string= station target))
                         (error "Target station not reached."))
                    (return trace)))
+
       ;; backtrace
       (loop :for (prev line now dep cost) = (gethash target trace):then (gethash prev trace)
             :while prev
