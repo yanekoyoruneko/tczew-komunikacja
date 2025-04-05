@@ -11,7 +11,8 @@
     do (add-connection connection)
        (print (start-station connection))
     finally
-       (with-open-file (out "graph.txt" :direction :output :if-exists :supersede)
+       (with-open-file (out (format nil "~d-transit.txt" (get-universal-time))
+                            :direction :output :if-exists :supersede)
          (print *stations* out))
        (return *stations*)))
 
@@ -20,15 +21,13 @@
   "Return list of route-table-requests for each bus line."
   (multiple-value-bind (data url) (scrapycl:fetch spider request)
     (declare (ignore url))
-    (list (aref (lquery:$ (initialize data)
-                          "#routes" ".list-type" "a"
-                          (combine
-                           (lquery:$1 (attr :href) (merge-url-with +url-root+))
-                           (attr "title"))
-                          (map-apply (lambda (route-page direction)
-                                       (make-route-table-req route-page direction))))
-                1))))
-
+    (lquery:$ (initialize data)
+              "#routes" ".list-type" "a"
+              (combine
+               (lquery:$1 (attr :href) (merge-url-with +url-root+))
+               (attr "title"))
+              (map-apply (lambda (route-page direction)
+                           (make-route-table-req route-page direction))))))
 
 (defmethod scrapycl:process ((spider bus-spider)
                              (route-req route-table-request))

@@ -13,16 +13,6 @@
   :documentation
   "Request template to kurs.php with 4 parameters.")
 
-(defun scrape-last-station-name (table)
-  "Return the last station name from bus route-table. This is the finall destination."
-  ;; The last station name is not inside <a></a> so it needs to be extracted separately.
-  ;; trim the ^ from ^Station Name
-  (str:trim (lquery:$1 table "tr" (last) "[style*=\"font-weight: bold;\"]" (text))))
-
-(defun scrape-last-alt-station-name (table)
-  "Return the point where alternate route joins with the primary route."
-  (str:trim (lquery:$1 table "tr" ".wciecie-1" (last) (parent) (next) (text))))
-
 (defun scrape-route-split-point (route-table)
   "Return the station name from which the route splits."
   ;; split point is the station at which there is alternate route
@@ -86,43 +76,52 @@
 
 (defun link-route-table-reqs (station-time-tables last-station-name)
   (loop
-    for prev-table = time-table
-    for time-table across station-time-tables
+    :for prev-table = time-table
+    :for time-table across station-time-tables
     ;; route table is vector of the following destinations
     ;; so link here the departure station for later arrive time scraping
-    unless (null prev-table)
-      do (setf (departure prev-table)
-               (station-name time-table))
-    finally (setf (departure time-table)
-                  last-station-name)
-            (return station-time-tables)))
+    :unless (null prev-table)
+      :do (setf (departure prev-table)
+                (station-name time-table))
+    :finally (setf (departure time-table)
+                   last-station-name)
+             (return station-time-tables)))
 
 (defun scrape-route-table (route-req route-table)
   "Return time-table-requests for route-table."
   (check-type route-req route-table-request)
   (check-type route-table plump:element)
-  (let ((split-point (scrape-route-split-point route-table)))
-    (concatenate 'vector
-                 (link-route-table-reqs
-                  (scrape-alternate-time-table-reqs route-req route-table split-point)
-                  (scrape-last-alt-station-name route-table))
-                 (link-route-table-reqs
-                  (scrape-primary-route route-req route-table (first split-point))
-                  (scrape-last-station-name route-table)))))
+  (flet ((scrape-last-alt-station-name (table)
+           ;; find the point where the alt route joins with main route
+           (str:trim (lquery:$1 table "tr" ".wciecie-1" (last) (parent) (next) (text))))
+         (scrape-last-station-name (table)
+           ;; The last station name is not inside <a></a> so it needs to be extracted separately.
+           ;; trim the ^ from ^Station Name
+           (str:trim (lquery:$1 table "tr" (last) "[style*=\"font-weight: bold;\"]" (text)))))
+
+    (let ((split-point (scrape-route-split-point route-table)))
+      (list
+       (link-route-table-reqs
+        (scrape-primary-route route-req route-table (first split-point))
+        (scrape-last-station-name route-table))
+       (when split-point
+         (link-route-table-reqs
+          (scrape-alternate-time-table-reqs route-req route-table split-point)
+          (scrape-last-alt-station-name route-table)))))))
 
 (defun make-arrive-time-reqs (arrive-table-links)
   "Return array of arrive-time-request objects ready to query kurs.php."
   (check-type arrive-table-links vector)
   (let ((onclick (lquery:$ arrive-table-links
-                   (map(lambda (el) (lquery:$1 el (attr "onclick")))))))
+                           (map(lambda (el) (lquery:$1 el (attr "onclick")))))))
     (lquery:$ onclick (map (lambda (link)
                              ;; get onclick attribute a, b, c, d
                              ;; parameters to query rozklad.php
                              (ppcre:register-groups-bind (a b c d)
                                  (+kurs-fn-regex+ link)
                                (format nil +kurs-php-req+ a b c d))))
-      (merge-url-with +url-root+)
-      (map (lambda (url) (make-instance 'arrive-time-request :url url))))))
+              (merge-url-with +url-root+)
+              (map (lambda (url) (make-instance 'arrive-time-request :url url))))))
 
 (defun scrape-arrive-times (arrive-table-links)
   "Return list of arrive times. "
@@ -144,17 +143,18 @@
     (when (< 0 (length minute-divs))	; some rows are empty
       (when (= 1 (length hour))		; pad with 0
         (setf hour (str:concat "0" hour)))
-      (loop for minutes across (lquery:$ minute-divs (map (lambda (el) (lquery:$1 el "a" (text)))))
-            for arrive in (scrape-arrive-times arrive-table-links)
-            when (or (not time-suffix) (string= (subseq minutes 2) time-suffix))
-              collect (cons (str:concat hour ":" minutes) arrive)))))
+      (loop :for minutes :across (lquery:$ minute-divs (map (lambda (el)
+                                                              (lquery:$1 el "a" (text)))))
+            :for arrive :in (scrape-arrive-times arrive-table-links)
+            :when (or (not time-suffix) (string= (subseq minutes 2) time-suffix))
+              :collect (cons (str:concat hour ":" minutes) arrive)))))
 
 (defun scrape-times (time-table departure time-suffix)
-  "For each row of the time-table extracts the departure and arrive time.
-row-to-time needs flattening mapcan"
+  "For each row of the time-table extracts the departure and arrive time."
+  ;; mapcan flattens the result of subsequent row-to-time calls
   (mapcan #'(lambda (el) el)
           (coerce (lquery:$ time-table
-                    "tr"
-                    (gt 1)
-                    (map #'(lambda (el) (process-row-to-time el time-suffix))))
+                            "tr"
+                            (gt 1)
+                            (map #'(lambda (el) (process-row-to-time el time-suffix))))
                   'list)))
